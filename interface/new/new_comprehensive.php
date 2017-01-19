@@ -11,6 +11,8 @@ require_once("$srcdir/acl.inc");
 require_once("$srcdir/options.inc.php");
 require_once("$srcdir/patient.inc");
 require_once("$srcdir/erx_javascript.inc.php");
+require_once("$srcdir/validation/LBF_Validation.php");
+require_once ("$srcdir/patientvalidation.inc.php");
 
 // Check authorization.
 if (!acl_check('patients','demo','',array('write','addonly') ))
@@ -21,8 +23,8 @@ $CPR = 4; // cells per row
 $searchcolor = empty($GLOBALS['layout_search_color']) ?
   '#ffff55' : $GLOBALS['layout_search_color'];
 
-$WITH_SEARCH = ($GLOBALS['full_new_patient_form'] == '1' || $GLOBALS['full_new_patient_form'] == '2');
-$SHORT_FORM  = ($GLOBALS['full_new_patient_form'] == '2' || $GLOBALS['full_new_patient_form'] == '3');
+$WITH_SEARCH = ($GLOBALS['full_new_patient_form'] == '1' || $GLOBALS['full_new_patient_form'] == '2' );
+$SHORT_FORM  = ($GLOBALS['full_new_patient_form'] == '2' || $GLOBALS['full_new_patient_form'] == '3' || $GLOBALS['full_new_patient_form'] == '4');
 
 function getLayoutRes() {
   global $SHORT_FORM;
@@ -86,12 +88,12 @@ div.section {
 
 <style type="text/css">@import url(../../library/dynarch_calendar.css);</style>
 
-<script type="text/javascript" src="../../library/dialog.js"></script>
+<script type="text/javascript" src="../../library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 <script type="text/javascript" src="../../library/textformat.js"></script>
 <script type="text/javascript" src="../../library/dynarch_calendar.js"></script>
 <?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
 <script type="text/javascript" src="../../library/dynarch_calendar_setup.js"></script>
-<script type="text/javascript" src="../../library/js/jquery.1.3.2.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-9-1/index.js"></script>
 <script type="text/javascript" src="../../library/js/common.js"></script>
 <script type="text/javascript" src="../../library/js/fancybox/jquery.fancybox-1.2.6.js"></script>
 <?php include_once("{$GLOBALS['srcdir']}/options.js.php"); ?>
@@ -103,7 +105,6 @@ if((top.window.parent) && (parent.window)){
         var wname = top.window.parent.left_nav;
         fname = (parent.window.name)?parent.window.name:window.name;
         wname.syncRadios();
-        wname.setRadio(fname, "new");
 }//Visolve - sync the radio buttons - End
 
 var mypcc = '<?php echo $GLOBALS['phone_country_code'] ?>';
@@ -221,7 +222,7 @@ function policykeyup(e) {
   if ((c >= '0' && c <= '9') ||
      (c >= 'A' && c <= 'Z') ||
      (c == '*') ||
-     (c == '-') ||     
+     (c == '-') ||
      (c == '_') ||
      (c == '(') ||
      (c == ')') ||
@@ -290,11 +291,26 @@ function validate(f) {
          msg += errMsgs[i] + "\n";
   }
   msg += "\n<?php echo htmlspecialchars(xl('Please fill them in before continuing.'),ENT_QUOTES); ?>";
- 
-  if ( errMsgs.length > 0 ) {
-         alert(msg);
-         return false;
-  }
+
+
+//Misc  Deceased Date Validation for Future Date
+var dateVal = document.getElementById("form_deceased_date").value;
+var currentDate;
+var d = new Date();
+month = '' + (d.getMonth() + 1),
+day = '' + d.getDate(),
+year = d.getFullYear();
+if (month.length < 2) month = '0' + month;
+if (day.length < 2) day = '0' + day;
+currentDate = year+'-'+month+'-'+day;
+if(errMsgs.length > 0 || dateVal > currentDate)
+{
+if(errMsgs.length > 0)
+	alert(msg);
+if(dateVal > currentDate)
+	alert ('<?php echo xls("Deceased Date should not be greater than Today"); ?>');
+	return false;
+}
  return true;
 }
 
@@ -375,7 +391,13 @@ while ($lrow = sqlFetchArray($lres)) {
 
 <body class="body_top">
 
-<form action='new_comprehensive_save.php' name='demographics_form' method='post' onsubmit='return validate(this)'>
+<?php
+/*Get the constraint from the DB-> LBF forms accordinf the form_id*/
+$constraints = LBF_Validation::generate_validate_constraints("DEM");
+?>
+<script> var constraints = <?php echo $constraints;?>; </script>
+
+<form action='new_comprehensive_save.php' name='demographics_form' id="DEM"  method='post' onsubmit='return submitme(<?php echo $GLOBALS['new_validate'] ? 1 : 0;?>,event,"DEM",constraints)'>
 
 <span class='title'><?php xl('Search or Add Patient','e'); ?></span>
 
@@ -426,6 +448,7 @@ while ($frow = sqlFetchArray($fres)) {
   $field_id   = $frow['field_id'];
   $list_id    = $frow['list_id'];
   $currvalue  = '';
+  $condition_str = get_conditions_str($condition_str,$group_fields);
 
   if (strpos($field_id, 'em_') === 0) {
     $tmp = substr($field_id, 3);
@@ -445,10 +468,10 @@ while ($frow = sqlFetchArray($fres)) {
       echo "<span class='bold'><input type='checkbox' name='form_cb_$group_seq' id='form_cb_$group_seq' value='1' " .
         "onclick='return divclick(this,\"div_$group_seq\");'";
       if ($display_style == 'block') echo " checked";
-        
-      // Modified 6-09 by BM - Translate if applicable  
+
+      // Modified 6-09 by BM - Translate if applicable
       echo " /><b>" . xl_layout_label($group_name) . "</b></span>\n";
-        
+
       echo "<div id='div_$group_seq' class='section' style='display:$display_style;'>\n";
       echo " <table border='0' cellpadding='0'>\n";
       $display_style = 'none';
@@ -466,11 +489,11 @@ while ($frow = sqlFetchArray($fres)) {
   }
 
   if ($item_count == 0 && $titlecols == 0) $titlecols = 1;
-
+  $field_id_label='label_'.$frow['field_id'];
   // Handle starting of a new label cell.
   if ($titlecols > 0) {
     end_cell();
-    echo "<td colspan='$titlecols'";
+    echo "<td colspan='$titlecols' id='$field_id_label'";
     echo ($frow['uor'] == 2) ? " class='required'" : " class='bold'";
     if ($cell_count == 2) echo " style='padding-left:10pt'";
     echo ">";
@@ -479,17 +502,18 @@ while ($frow = sqlFetchArray($fres)) {
   ++$item_count;
 
   echo "<b>";
-    
-  // Modified 6-09 by BM - Translate if applicable  
+
+  // Modified 6-09 by BM - Translate if applicable
   if ($frow['title']) echo (xl_layout_label($frow['title']).":"); else echo "&nbsp;";
-    
+
   echo "</b>";
 
   // Handle starting of a new data cell.
   if ($datacols > 0) {
+      $id_field_text = "text_".$frow['field_id'];
     end_cell();
-    echo "<td colspan='$datacols' class='text'";
-    if ($cell_count > 0) echo " style='padding-left:5pt'";
+    echo "<td colspan='$datacols' class='text data'";
+    if ($cell_count > 0) echo " style='padding-left:5pt'". " id='".$id_field_text."'";
     echo ">";
     $cell_count += $datacols;
   }
@@ -511,13 +535,10 @@ if (! $GLOBALS['simplified_demographics']) {
   $insurance_info[2] = getInsuranceData($pid,"secondary");
   $insurance_info[3] = getInsuranceData($pid,"tertiary");
 
- echo "<br /><span class='bold'><input type='checkbox' name='form_cb_ins' value='1' " .
+  echo "<br /><span class='bold'><input type='checkbox' name='form_cb_ins' value='1' " .
     "onclick='return divclick(this,\"div_ins\");'";
   if ($display_style == 'block') echo " checked";
   echo " /><b>" . xl('Insurance') . "</b></span>\n";
-  echo "<div id='div_ins' class='section' style='display:$display_style;'>\n";
-
-
   echo "<div id='div_ins' class='section' style='display:$display_style;'>\n";
 
   for($i=1;$i<=3;$i++) {
@@ -749,12 +770,17 @@ if (! $GLOBALS['simplified_demographics']) {
 
 <script language="JavaScript">
 
+// hard code validation for old validation, in the new validation possible to add match rules
+<?php if($GLOBALS['new_validate'] == 0) { ?>
+
 // fix inconsistently formatted phone numbers from the database
 var f = document.forms[0];
 if (f.form_phone_contact) phonekeyup(f.form_phone_contact,mypcc);
 if (f.form_phone_home   ) phonekeyup(f.form_phone_home   ,mypcc);
 if (f.form_phone_biz    ) phonekeyup(f.form_phone_biz    ,mypcc);
 if (f.form_phone_cell   ) phonekeyup(f.form_phone_cell   ,mypcc);
+
+<?php }?>
 
 <?php echo $date_init; ?>
 
@@ -775,51 +801,64 @@ enable_modals();
     <?php for ($i=1;$i<=3;$i++) { ?>
     $("#form_i<?php echo $i?>subscriber_relationship").change(function() { auto_populate_employer_address<?php echo $i?>(); });
     <?php } ?>
-	
+
     $('#search').click(function() { searchme(); });
-    $('#create').click(function() { submitme(); });
+    $('#create').click(function() { check()});
 
-    var submitme = function() {
-      top.restoreSession();
-      var f = document.forms[0];
+    var check = function(e) {
+      <?php if($GLOBALS['new_validate']){?>
+            var valid = submitme(<?php echo $GLOBALS['new_validate'] ? 1 : 0;?>,e,"DEM",constraints);
+      <?php }else{?>
+            top.restoreSession();
+            var f = document.forms[0];
+            var valid = validate(f);
+      <?php }?>
+        if (valid) {
+            if (force_submit) {
+                // In this case dups were shown already and Save should just save.
+                top.restoreSession();
+                f.submit();
+                return;
+            }
 
-      if (validate(f)) {
-        if (force_submit) {
-          // In this case dups were shown already and Save should just save.
-          f.submit();
-          return;
+      <?php
+        // D in edit_options indicates the field is used in duplication checking.
+        // This constructs a list of the names of those fields.
+        $mflist = "";
+        $mfres = sqlStatement("SELECT * FROM layout_options " .
+            "WHERE form_id = 'DEM' AND uor > 0 AND field_id != '' AND " .
+            "edit_options LIKE '%D%' " .
+            "ORDER BY group_name, seq");
+        while ($mfrow = sqlFetchArray($mfres)) {
+            $field_id  = $mfrow['field_id'];
+            if (strpos($field_id, 'em_') === 0) continue;
+            if (!empty($mflist)) $mflist .= ",";
+            $mflist .= "'" . htmlentities($field_id) . "'";
         }
-<?php
-// D in edit_options indicates the field is used in duplication checking.
-// This constructs a list of the names of those fields.
-$mflist = "";
-$mfres = sqlStatement("SELECT * FROM layout_options " .
-  "WHERE form_id = 'DEM' AND uor > 0 AND field_id != '' AND " .
-  "edit_options LIKE '%D%' " .
-  "ORDER BY group_name, seq");
-while ($mfrow = sqlFetchArray($mfres)) {
-  $field_id  = $mfrow['field_id'];
-  if (strpos($field_id, 'em_') === 0) continue;
-  if (!empty($mflist)) $mflist .= ",";
-  $mflist .= "'" . htmlentities($field_id) . "'";
-}
 ?>
-        // Build and invoke the URL to create the dup-checker dialog.
-        var url = 'new_search_popup.php';
+        <?php if ( ($GLOBALS['full_new_patient_form'] == '4') && (checkIfPatientValidationHookIsActive()) ):?>
+            // Use zend module patient validation hook to open the controller and send the dup-checker fields.
+            var url ='<?php echo  $GLOBALS['web_root']."/interface/modules/zend_modules/public/patientvalidation";?>';
+        <?php else:?>
+            // Build and invoke the URL to create the dup-checker dialog.
+            var url = 'new_search_popup.php';
+        <?php endif;?>
+
         var flds = new Array(<?php echo $mflist; ?>);
         var separator = '?';
         for (var i = 0; i < flds.length; ++i) {
-          var fval = $('#form_' + flds[i]).val();
-          if (fval && fval != '') {
-            url += separator;
-            separator = '&';
-            url += 'mf_' + flds[i] + '=' + encodeURIComponent(fval);
-          }
+            var fval = $('#form_' + flds[i]).val();
+            if (fval && fval != '') {
+                url += separator;
+                separator = '&';
+                url += 'mf_' + flds[i] + '=' + encodeURIComponent(fval);
+            }
         }
+        url+="&close"
         dlgopen(url, '_blank', 700, 500);
-
-      } // end if validate
+        } // end function
     } // end function
+
 
 // Set onclick/onfocus handlers for toggling background color.
 <?php
@@ -841,6 +880,27 @@ while ($lrow = sqlFetchArray($lres)) {
 
 }); // end document.ready
 
+</script>
+<?php /*Include the validation script and rules for this form*/
+$form_id="DEM";
+?>
+
+<?php
+//LBF forms use the new validation depending on the global value
+$use_validate_js=$GLOBALS['new_validate'];
+include_once("$srcdir/validation/validation_script.js.php");?>
+<script language='JavaScript'>
+    // Array of skip conditions for the checkSkipConditions() function.
+    var skipArray = [
+        <?php echo $condition_str; ?>
+    ];
+    checkSkipConditions();
+    $("input").change(function() {
+        checkSkipConditions();
+    });
+    $("select").change(function() {
+        checkSkipConditions();
+    });
 </script>
 
 </html>

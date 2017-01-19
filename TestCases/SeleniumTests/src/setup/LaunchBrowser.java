@@ -17,10 +17,9 @@ public class LaunchBrowser {
 	//public static HtmlUnitDriver driver;
 	public static WebDriver driver;
 	@BeforeSuite
-	
-	public static void launchBrowser(){
-		BufferedReader br=new BufferedReader(new FileReader("/tmp/elb-dns.txt"));
-		String url=br.readLine();
+	@Parameters({"url"})
+	public static void launchBrowser(String url){
+		
 
 		/*String Xport = System.getProperty(
                 "lmportal.xvfb.id", ":1");

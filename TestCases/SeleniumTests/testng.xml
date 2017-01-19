@@ -3,7 +3,7 @@
 
 <suite name="OpenEMR">
 
-
+<parameter name="url" value="http://secondtest.3txuyeisg4.us-west-2.elasticbeanstalk.com/"></parameter>
   <test name="DemoTests">
   
   <classes>

@@ -30,7 +30,7 @@ public class LaunchBrowser {
 
         // Start Firefox driver
        driver = new FirefoxDriver(firefoxBinary, null);*/
-		System.setProperty("webdriver.firefox.bin","/usr/bin/firefox");
+		//System.setProperty("webdriver.firefox.bin","/usr/bin/firefox");
 		driver=new FirefoxDriver();
 
 		

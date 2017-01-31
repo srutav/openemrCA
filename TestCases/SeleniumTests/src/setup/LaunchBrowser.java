@@ -56,7 +56,7 @@ public class LaunchBrowser {
 			System.out.println("browser should be either Firefox or Chrome");
 		}*/
 		driver.manage().window().maximize();
-		driver.manage().timeouts().implicitlyWait(30, TimeUnit.SECONDS);
+		driver.manage().timeouts().implicitlyWait(60, TimeUnit.SECONDS);
 		driver.get(url);
 	}
 		
